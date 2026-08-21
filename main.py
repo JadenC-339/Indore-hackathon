@@ -1,110 +1,244 @@
-# Soil Parameter Classifier — outputs 0 (low), 1 (in range), 2 (above range) for 7 parameters
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.multioutput import MultiOutputClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import joblib
+import json
+import os
+import numpy as np
 
-# 1. Load dataset
-df = pd.read_csv('Crop_recommendation.csv')
-print(f"Loaded {df.shape[0]} samples with {df.shape[1]} columns")
+app = FastAPI(title="Soil ML Service")
 
-# 2. Add mock sensor columns (replace with real sensor data later)
-np.random.seed(42)
-df['EC'] = np.random.uniform(0.0, 2.5, len(df))        # wider range to get all 3 classes
-df['moisture'] = np.random.uniform(10, 95, len(df))     # wider range to get all 3 classes
-print("Added EC and moisture columns")
+MODEL_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 3. Define healthy ranges for each parameter
-ranges = {
-    'N':           (50, 150),
-    'P':           (16, 45),
-    'K':           (120, 240),
-    'EC':          (0.2, 1.8),
-    'ph':          (6.0, 7.5),
-    'moisture':    (20, 80),
-    'temperature': (15, 35),
-}
+# Globals for models
+model = None
+scaler = None
+encoder = None
+metrics_data = None
 
-# 4. Create tri-state labels:  0 = low, 1 = in range, 2 = above range
-def tri_label(value, low, high):
-    if value < low:
-        return 0
-    elif value <= high:
-        return 1
+def print_separator(title="", char="-", width=80):
+    if title:
+        pad = (width - len(title) - 2) // 2
+        print(f"\n{char * pad} {title} {char * pad}")
     else:
-        return 2
+        print(char * width)
 
-def create_labels(row):
-    return pd.Series({
-        param: tri_label(row[param], lo, hi)
-        for param, (lo, hi) in ranges.items()
-    })
+def print_startup_metrics():
+    """Print comprehensive model metrics when the ML service starts."""
+    if not metrics_data:
+        print("[WARNING] No metrics found. Train the model first!")
+        return
 
-labels = df.apply(create_labels, axis=1).astype(int)
+    print_separator("SOILAI ML SERVICE - MODEL METRICS", "=")
+    
+    # Overall accuracy
+    acc = metrics_data.get("accuracy", 0)
+    print(f"\n  [*] Overall Accuracy:     {acc * 100:.2f}%")
+    print(f"  [*] Macro Precision:      {metrics_data.get('macro_precision', 0) * 100:.2f}%")
+    print(f"  [*] Macro Recall:         {metrics_data.get('macro_recall', 0) * 100:.2f}%")
+    print(f"  [*] Macro F1-Score:       {metrics_data.get('macro_f1', 0) * 100:.2f}%")
+    print(f"  [*] Weighted F1-Score:    {metrics_data.get('weighted_f1', 0) * 100:.2f}%")
+    
+    # Dataset info
+    ds = metrics_data.get("dataset_info", {})
+    print(f"\n  [Data] Dataset: {ds.get('total_samples', '?')} samples, {ds.get('total_crops', '?')} crops")
+    print(f"  [Cfg] Train: {ds.get('train_samples', '?')} | Test: {ds.get('test_samples', '?')}")
+    
+    # Per-class metrics
+    per_class = metrics_data.get("per_class_metrics", {})
+    if per_class:
+        print_separator("PER-CLASS PERFORMANCE")
+        print(f"  {'Crop':<20} {'Prec':>8} {'Recall':>8} {'F1':>8} {'Support':>8}")
+        print("  " + "-" * 56)
+        
+        sorted_classes = sorted(per_class.items(), key=lambda x: x[1].get('f1_score', 0), reverse=True)
+        for cls, m in sorted_classes:
+            f1 = m.get('f1_score', 0)
+            if f1 >= 0.95:
+                status = "[OK]"
+            elif f1 >= 0.80:
+                status = "[WARN]"
+            else:
+                status = "[FAIL]"
+            print(f"  {status} {cls:<18} {m.get('precision',0):>8.2%} {m.get('recall',0):>8.2%} {f1:>8.2%} {m.get('support',0):>8}")
+    
+    # Confusion matrix summary — just show misclassifications
+    cm = metrics_data.get("confusion_matrix", [])
+    classes = metrics_data.get("classes", [])
+    if cm and classes:
+        print_separator("MISCLASSIFICATIONS")
+        found = False
+        cm_np = np.array(cm)
+        for i in range(len(classes)):
+            for j in range(len(classes)):
+                if i != j and cm_np[i][j] > 0:
+                    found = True
+                    print(f"  [!] {classes[i]:<20} -> {classes[j]:<20} ({cm_np[i][j]} samples)")
+        if not found:
+            print("  [OK] No misclassifications in test set!")
+    
+    # Feature importance
+    fi = metrics_data.get("feature_importance", {})
+    if fi:
+        print_separator("FEATURE IMPORTANCE")
+        for feat, imp in sorted(fi.items(), key=lambda x: -x[1]):
+            bar = '#' * int(imp * 50)
+            print(f"  {feat:>12}: {imp:.4f} {bar}")
+    
+    print_separator("SERVICE READY - Predictions use real predict_proba confidence", "=")
+    print()
 
-print("\nLabel distribution per parameter:")
-for col in labels.columns:
-    counts = labels[col].value_counts().sort_index()
-    print(f"  {col}:  0(low)={counts.get(0,0)}  1(ok)={counts.get(1,0)}  2(high)={counts.get(2,0)}")
+# Load models and metrics on startup
+@app.on_event("startup")
+def load_models():
+    global model, scaler, encoder, metrics_data
+    model_path = os.path.join(MODEL_DIR, "crop_xgb_model.pkl")
+    scaler_path = os.path.join(MODEL_DIR, "scaler.pkl")
+    encoder_path = os.path.join(MODEL_DIR, "label_encoder.pkl")
+    metrics_path = os.path.join(MODEL_DIR, "metrics.json")
+    
+    if os.path.exists(model_path):
+        model = joblib.load(model_path)
+        print("[OK] Model loaded.")
+    if os.path.exists(scaler_path):
+        scaler = joblib.load(scaler_path)
+        print("[OK] Scaler loaded.")
+    if os.path.exists(encoder_path):
+        encoder = joblib.load(encoder_path)
+        print("[OK] Label encoder loaded.")
+    if os.path.exists(metrics_path):
+        with open(metrics_path, "r") as f:
+            metrics_data = json.load(f)
+        print("[OK] Metrics loaded.")
+    
+    # Print full metrics summary to terminal
+    print_startup_metrics()
 
-# 5. Features (9 sensor columns)
-features = ['N', 'P', 'K', 'temperature', 'humidity', 'ph', 'rainfall', 'EC', 'moisture']
-X = df[features].copy()
+class SoilInput(BaseModel):
+    n: float
+    p: float
+    k: float
+    temperature: float
+    humidity: float
+    ph: float
+    rainfall: float
+    moisture: float
 
-# 6. Scale
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+def check_soil_health(data: SoilInput):
+    tips = []
+    issues = 0
+    
+    # Simple rule-based logic for Soil parameters
+    # Ideal ranges: N (50-150), P (16-45), K (120-240), pH (6-7.5), Moisture (20-80)
+    if data.n < 50:
+        tips.append("Low Nitrogen: Add Nitrogen-rich fertilizers like Urea. Home Remedy: Mix coffee grounds, composted manure, or blood meal into the soil.")
+        issues += 1
+    elif data.n > 150:
+        tips.append("High Nitrogen: Reduce N-fertilizers; consider nitrogen-absorbing catch crops. Home Remedy: Add sawdust or wood chips to bind excess nitrogen.")
+        issues += 1
+        
+    if data.p < 16:
+        tips.append("Low Phosphorus: Add phosphorus-rich fertilizers like Bone Meal. Home Remedy: Bury banana peels or use homemade bone meal.")
+        issues += 1
+    elif data.p > 45:
+        tips.append("High Phosphorus: Avoid adding P-fertilizers. Home Remedy: Plant nitrogen-fixing legumes to naturally balance the soil.")
+        issues += 1
+        
+    if data.k < 120:
+        tips.append("Low Potassium: Add Potash to improve root growth. Home Remedy: Use wood ash (in moderation) or seaweed extract/kelp meal.")
+        issues += 1
+        
+    if data.ph < 6.0:
+        tips.append("Acidic Soil: Apply agricultural lime. Home Remedy: Mix crushed eggshells or wood ash into the topsoil to naturally raise pH.")
+        issues += 1
+    elif data.ph > 7.5:
+        tips.append("Alkaline Soil: Add elemental sulfur. Home Remedy: Add pine needles, peat moss, or coffee grounds to slowly lower the pH.")
+        issues += 1
+        
+    if data.moisture < 20:
+        tips.append("Dry Soil: Increase irrigation frequency. Home Remedy: Use organic mulch (straw, dry leaves) to retain moisture and reduce evaporation.")
+        issues += 1
+    elif data.moisture > 80:
+        tips.append("Waterlogged Soil: Improve drainage systems. Home Remedy: Mix sand or organic compost into the soil to improve aeration and prevent root rot.")
+        issues += 1
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X_scaled, labels, test_size=0.2, random_state=42
-)
-print(f"\nTrain: {X_train.shape}, Test: {X_test.shape}")
+    if issues == 0:
+        quality = "Good"
+        tips.append("Maintain current organic compost routines.")
+    elif issues <= 2:
+        quality = "Moderate"
+    else:
+        quality = "Poor"
+        tips.append("Implement crop rotation using leguminous plants to restore balance naturally.")
+        
+    return quality, tips
 
-# 7. Train multi-output model (RandomForest handles 3 classes per output cleanly)
-print("Training multi-output RandomForest (3-class)...")
-base_model = RandomForestClassifier(n_estimators=200, random_state=42)
-model = MultiOutputClassifier(base_model)
-model.fit(X_train, y_train)
+@app.post("/api/predict")
+def predict_crop(data: SoilInput):
+    if not model or not scaler or not encoder:
+        raise HTTPException(status_code=500, detail="Models not loaded. Please train the model first.")
+    
+    # 1. Soil Quality and Tips
+    quality, tips = check_soil_health(data)
+    
+    # 2. Crop Prediction
+    features = np.array([[data.n, data.p, data.k, data.temperature, data.humidity, data.ph, data.rainfall]])
+    features_scaled = scaler.transform(features)
+    
+    # Get probabilities for ALL crops — this is the REAL per-prediction confidence
+    probs = model.predict_proba(features_scaled)[0]
+    top_indices = np.argsort(probs)[::-1]  # sorted descending
+    
+    # Top 2 crops with their actual probabilities
+    top_2_indices = top_indices[:2]
+    best_crops = encoder.inverse_transform(top_2_indices).tolist()
+    
+    # Per-prediction confidence: the actual probability the model assigns to each crop
+    top_1_confidence = float(probs[top_indices[0]])
+    top_2_confidence = float(probs[top_indices[1]])
+    
+    # Build crop details with individual confidence scores
+    crop_confidences = [
+        {"crop": best_crops[0], "confidence": round(top_1_confidence, 4)},
+        {"crop": best_crops[1], "confidence": round(top_2_confidence, 4)},
+    ]
+    
+    # Log the prediction to terminal for debugging
+    print(f"\n{'-'*60}")
+    print(f"[REQ] PREDICTION REQUEST")
+    print(f"   Input: N={data.n}, P={data.p}, K={data.k}, pH={data.ph}, Temp={data.temperature}, Humidity={data.humidity}, Rainfall={data.rainfall}")
+    print(f"   [1] Top Crop: {best_crops[0]} ({top_1_confidence*100:.1f}% confidence)")
+    print(f"   [2] 2nd Crop: {best_crops[1]} ({top_2_confidence*100:.1f}% confidence)")
+    print(f"   [INFO] Soil Quality: {quality}")
+    
+    # Show top 5 probabilities for deeper insight
+    top_5_indices = top_indices[:5]
+    top_5_crops = encoder.inverse_transform(top_5_indices).tolist()
+    print(f"   [Stats] Top 5 predictions:")
+    for idx, crop_idx in enumerate(top_5_indices):
+        crop_name = encoder.inverse_transform([crop_idx])[0]
+        prob = probs[crop_idx]
+        bar = '#' * int(prob * 30)
+        print(f"      {idx+1}. {crop_name:<18} {prob*100:>6.2f}% {bar}")
+    print(f"{'-'*60}")
+    
+    # If soil is good, suggest high yield, else limit crops or suggest robust ones
+    if quality == "Poor":
+        # Maybe insert a tip for robust crops, but we still return what the model predicted
+        tips.append(f"Consider growing soil-restoring crops alongside {best_crops[0]}.")
+    elif quality == "Good":
+        tips.append(f"Ideal conditions for high-yield {best_crops[0]}.")
 
-# 8. Evaluate
-y_pred = model.predict(X_test)
-print("\nAccuracy per parameter:")
-for i, param in enumerate(labels.columns):
-    acc = accuracy_score(y_test.iloc[:, i], y_pred[:, i])
-    print(f"  {param}: {acc:.3f}")
+    return {
+        "soil_quality": quality,
+        "recommended_crops": best_crops,
+        "improvement_tips": tips,
+        "prediction_confidence": top_1_confidence,  # Real per-prediction confidence
+        "crop_confidences": crop_confidences,        # Individual confidence per crop
+        "model_accuracy": metrics_data.get("accuracy", 0) if metrics_data else None  # Overall model accuracy (for reference)
+    }
 
-# 9. Test with user-provided sensor input
-print("\n--- Sensor Input ---")
-print("Enter your soil sensor readings:")
-n_val       = float(input("  Nitrogen (N):      "))
-p_val       = float(input("  Phosphorus (P):    "))
-k_val       = float(input("  Potassium (K):     "))
-temp_val    = float(input("  Temperature (°C):  "))
-hum_val     = float(input("  Humidity (%):      "))
-ph_val      = float(input("  pH:                "))
-rain_val    = float(input("  Rainfall (mm):     "))
-ec_val      = float(input("  EC (dS/m):         "))
-moist_val   = float(input("  Moisture (%):      "))
-
-sensor_input = np.array([[n_val, p_val, k_val, temp_val, hum_val, ph_val, rain_val, ec_val, moist_val]])
-sensor_scaled = scaler.transform(sensor_input)
-prediction = model.predict(sensor_scaled)[0]
-
-status_map = {0: 'LOW', 1: 'OK', 2: 'HIGH'}
-print(f"\n  {'Parameter':<15} {'Value':<8} {'Code':<6} {'Status'}")
-print(f"  {'-'*40}")
-param_names = list(labels.columns)
-param_to_input = {'N': n_val, 'P': p_val, 'K': k_val, 'EC': ec_val, 'ph': ph_val, 'moisture': moist_val, 'temperature': temp_val}
-for param, code in zip(param_names, prediction):
-    val = param_to_input.get(param, '—')
-    print(f"  {param:<15} {str(val):<8} {code:<6} {status_map[code]}")
-
-# 10. Save model & scaler
-joblib.dump(model, 'fpga_led_model.pkl')
-joblib.dump(scaler, 'scaler.pkl')
-print("\nSaved: fpga_led_model.pkl + scaler.pkl")
-print("Done! Model outputs 0/1/2 for each parameter — ready for FPGA.")
+@app.get("/api/metrics")
+def get_metrics():
+    if not metrics_data:
+        raise HTTPException(status_code=404, detail="Metrics not found. Train the model first.")
+    return metrics_data
