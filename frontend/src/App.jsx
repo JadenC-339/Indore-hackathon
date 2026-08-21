@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LanguageProvider } from './context/LanguageContext';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
@@ -37,7 +37,7 @@ const ProtectedRoute = ({ children }) => {
 function App() {
   return (
     <LanguageProvider>
-      <BrowserRouter>
+      <HashRouter>
         <AIChatbot />
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -70,7 +70,7 @@ function App() {
             <Route path="communication" element={<Communication />} />
           </Route>
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </LanguageProvider>
   );
 }
