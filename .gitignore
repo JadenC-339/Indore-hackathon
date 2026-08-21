@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+__pycache__/
+
+# Environment
+.env
+
+# Build output
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large model files (optional - uncomment if you want to exclude them)
+# *.pkl
+
+# Video files (too large for git)
+landing page video.mp4
+
+landing_video.mp4
+frontend/public/landing_video.mp4

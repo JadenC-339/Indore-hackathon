@@ -1,0 +1,363 @@
+# KrishiMitra — Complete Project Walkthrough
+
+## How to Run the Project
+
+You need to start **3 separate services** in **3 separate terminals**, in this order:
+
+---
+
+### 1️⃣ PostgreSQL Database (prerequisite)
+Make sure PostgreSQL is running on `localhost:5432` with the database `soil_ml_db` already created.
+
+If the database doesn't exist yet, run this **once**:
+```bash
+cd c:\Users\Admin\Desktop\Soil\backend
+node create_db.js
+```
+> This connects to the default `postgres` database and creates `soil_ml_db`. The tables are auto-created when the backend starts.
+
+---
+
+### 2️⃣ ML Service (Python FastAPI) — Port 8002
+```bash
+cd c:\Users\Admin\Desktop\Soil\ml_service
+pip install -r requirements.txt          # one-time
+uvicorn main:app --host 127.0.0.1 --port 8002 --reload
+```
+> [!IMPORTANT]
+> Start this **before** the backend. The backend calls this service on `http://127.0.0.1:8002`.
+
+---
+
+### 3️⃣ Backend (Node.js Express) — Port 5005
+```bash
+cd c:\Users\Admin\Desktop\Soil\backend
+npm install                              # one-time
+npm start
+```
+> Runs on `http://localhost:5005`. Auto-creates all DB tables on startup via `initDB()`.
+
+---
+
+### 4️⃣ Frontend (React + Vite) — Port 5173
+```bash
+cd c:\Users\Admin\Desktop\Soil\frontend
+npm install                              # one-time
+npm run dev
+```
+> Opens at `http://localhost:5173`. All API requests go to `http://localhost:5005`.
+
+---
+
+## Full Architecture Diagram
+
+```mermaid
+graph TD
+    subgraph User
+        Browser["🌐 Browser<br/>localhost:5173"]
+    end
+
+    subgraph Frontend["Frontend — React + Vite"]
+        Landing["Landing Page<br/>(/)"]
+        Login["Login Page<br/>(/login)"]
+        Analyze["Analyze Page<br/>(/app/analyze)"]
+        Results["Results Page<br/>(/app/results)"]
+        Insights["Insights Page<br/>(/app/insights)"]
+        History["History Page<br/>(/app/history)"]
+        Communication["SMS Page<br/>(/app/communication)"]
+        Chatbot["KrishiMitra AI Chatbot<br/>(floating widget)"]
+    end
+
+    subgraph Backend["Backend — Node.js Express :5005"]
+        PredictAPI["POST /predict"]
+        HistoryAPI["GET /history"]
+        MetricsAPI["GET /metrics"]
+        SendSMS["POST /api/send-sms"]
+        SendOTP["POST /api/send-otp"]
+        VerifyOTP["POST /api/verify-otp"]
+        ChatAPI["POST /api/chat"]
+    end
+
+    subgraph ML["ML Service — Python FastAPI :8002"]
+        MLPredict["POST /api/predict"]
+        MLMetrics["GET /api/metrics"]
+        XGBModel["XGBoost + RF<br/>Ensemble Model"]
+        Scaler["StandardScaler"]
+        Encoder["LabelEncoder"]
+    end
+
+    subgraph DB["PostgreSQL — soil_ml_db :5432"]
+        SoilTable["soil_data"]
+        PredTable["predictions"]
+        FarmerTable["farmers"]
+        OTPTable["otp_store"]
+        MetricsTable["model_metrics"]
+    end
+
+    subgraph External["External APIs"]
+        Fast2SMS["Fast2SMS API"]
+        Gemini["Google Gemini 2.5 Flash"]
+    end
+
+    Browser --> Frontend
+    Analyze -->|POST soil params| PredictAPI
+    PredictAPI -->|Forward to ML| MLPredict
+    MLPredict --> XGBModel
+    MLPredict --> Scaler
+    MLPredict --> Encoder
+    PredictAPI -->|Save raw data| SoilTable
+    PredictAPI -->|Save prediction| PredTable
+    History -->|GET| HistoryAPI
+    HistoryAPI -->|JOIN query| SoilTable
+    HistoryAPI -->|JOIN query| PredTable
+    Insights -->|GET| MetricsAPI
+    MetricsAPI -->|Proxy| MLMetrics
+    Communication -->|POST| SendSMS
+    SendSMS --> Fast2SMS
+    Login -->|POST| SendOTP
+    SendOTP --> OTPTable
+    SendOTP --> Fast2SMS
+    Login -->|POST| VerifyOTP
+    VerifyOTP --> OTPTable
+    VerifyOTP --> FarmerTable
+    Chatbot -->|POST| ChatAPI
+    ChatAPI --> Gemini
+```
+
+---
+
+## Component-by-Component Breakdown
+
+### 🟢 Frontend (React + Vite)
+
+| File | Purpose |
+|---|---|
+| [App.jsx](file:///c:/Users/Admin/Desktop/Soil/frontend/src/App.jsx) | Root router — defines all routes, `ProtectedRoute` guard checks `localStorage` for auth |
+| [Layout.jsx](file:///c:/Users/Admin/Desktop/Soil/frontend/src/components/Layout.jsx) | Navbar + `<Outlet>` — wraps all `/app/*` pages with navigation bar |
+| [Landing.jsx](file:///c:/Users/Admin/Desktop/Soil/frontend/src/pages/Landing.jsx) | Public landing page with parallax scrolling and promo video |
+| [Login.jsx](file:///c:/Users/Admin/Desktop/Soil/frontend/src/pages/Login.jsx) | OTP-based phone login — calls `/api/send-otp` and `/api/verify-otp` |
+| [Analyze.jsx](file:///c:/Users/Admin/Desktop/Soil/frontend/src/pages/Analyze.jsx) | Soil parameter input form — sliders for N, P, K, pH, moisture, etc. Has crop presets. Calls `POST /predict` |
+| [Results.jsx](file:///c:/Users/Admin/Desktop/Soil/frontend/src/pages/Results.jsx) | Displays ML prediction results (soil quality, crop recommendations, tips). Receives data via `navigate state` |
+| [Insights.jsx](file:///c:/Users/Admin/Desktop/Soil/frontend/src/pages/Insights.jsx) | Data visualizations using Recharts — model metrics, confusion matrix, etc. Calls `GET /metrics` |
+| [History.jsx](file:///c:/Users/Admin/Desktop/Soil/frontend/src/pages/History.jsx) | Shows past predictions from DB. Calls `GET /history` |
+| [Communication.jsx](file:///c:/Users/Admin/Desktop/Soil/frontend/src/pages/Communication.jsx) | Send SMS to farmers with soil reports. Calls `POST /api/send-sms` via Fast2SMS |
+| [AIChatbot.jsx](file:///c:/Users/Admin/Desktop/Soil/frontend/src/components/AIChatbot.jsx) | Floating KrishiMitra AI chatbot — multilingual, voice input/output, smart navigation actions. Calls `POST /api/chat` |
+| [i18n.js](file:///c:/Users/Admin/Desktop/Soil/frontend/src/utils/i18n.js) | Translation strings for 9 Indian languages (EN, HI, MR, TA, TE, BN, GU, KN, PA) |
+
+#### Auth Flow
+1. User enters phone number on Login page
+2. Frontend calls `POST /api/send-otp` → backend generates OTP (hardcoded `123456` for dev), stores in `otp_store` table, optionally sends via Fast2SMS
+3. User enters OTP → Frontend calls `POST /api/verify-otp` → backend verifies against `otp_store`, creates/updates farmer in `farmers` table
+4. On success, farmer info is saved to `localStorage('soilai_farmer')`
+5. `ProtectedRoute` component checks `localStorage` before allowing access to `/app/*` routes
+
+#### Route Protection
+```
+/               → Landing (public)
+/login          → Login (public)
+/app/*          → Protected by ProtectedRoute (checks localStorage)
+  /app/analyze       → Analyze
+  /app/results       → Results
+  /app/insights      → Insights
+  /app/history       → History
+  /app/communication → SMS Communication
+```
+
+---
+
+### 🔵 Backend (Node.js Express)
+
+**File**: [server.js](file:///c:/Users/Admin/Desktop/Soil/backend/server.js) — single file with all routes
+**DB Config**: [db.js](file:///c:/Users/Admin/Desktop/Soil/backend/db.js) — PostgreSQL pool + table creation
+**Environment**: [.env](file:///c:/Users/Admin/Desktop/Soil/backend/.env) — credentials and config
+
+#### API Endpoints
+
+| Method | Endpoint | Purpose | Connects To |
+|---|---|---|---|
+| `POST` | `/predict` | Accept soil params → save to DB → call ML → save prediction → return results | PostgreSQL + ML Service |
+| `GET` | `/history` | Fetch last 50 predictions (JOIN soil_data + predictions) | PostgreSQL |
+| `GET` | `/metrics` | Proxy to ML service for model performance metrics | ML Service |
+| `POST` | `/api/send-sms` | Send SMS to farmer via Fast2SMS | Fast2SMS API |
+| `POST` | `/api/send-otp` | Generate + store OTP, send via SMS | PostgreSQL + Fast2SMS |
+| `POST` | `/api/verify-otp` | Verify OTP, login or register farmer | PostgreSQL |
+| `POST` | `/api/chat` | AI chatbot powered by Gemini — understands context, returns JSON with response + navigation actions | Google Gemini API |
+
+#### `/predict` — Core Data Flow (the main pipeline)
+
+```mermaid
+sequenceDiagram
+    participant F as Frontend (Analyze)
+    participant B as Backend (:5005)
+    participant DB as PostgreSQL
+    participant ML as ML Service (:8002)
+
+    F->>B: POST /predict {n, p, k, ph, moisture, temp, humidity, rainfall}
+    B->>DB: INSERT INTO soil_data → returns soil_id
+    B->>ML: POST /api/predict (same params)
+    ML->>ML: Scale features → Predict with XGBoost+RF → Evaluate soil health
+    ML-->>B: {soil_quality, recommended_crops, improvement_tips, model_accuracy}
+    B->>DB: INSERT INTO predictions (soil_id, quality, crops, tips)
+    B-->>F: {soil_quality, recommended_crops, improvement_tips, model_accuracy}
+    F->>F: navigate('/app/results', {state: result})
+```
+
+---
+
+### 🟡 ML Service (Python FastAPI)
+
+**File**: [main.py](file:///c:/Users/Admin/Desktop/Soil/ml_service/main.py)
+**Training Script**: [train_xgboost.py](file:///c:/Users/Admin/Desktop/Soil/ml_service/train_xgboost.py)
+**Dataset**: [Crop_recommendation.csv](file:///c:/Users/Admin/Desktop/Soil/soil/Crop_recommendation.csv) (in the `soil/` directory)
+
+#### What the ML Model Does
+1. **Training** (`train_xgboost.py`):
+   - Loads `Crop_recommendation.csv` (22 crops, 7 features: N, P, K, temperature, humidity, pH, rainfall)
+   - Encodes crop labels with `LabelEncoder`
+   - Scales features with `StandardScaler`
+   - Trains an **Ensemble** model: `VotingClassifier(XGBClassifier + RandomForestClassifier)` with soft voting
+   - Saves: `crop_xgb_model.pkl`, `scaler.pkl`, `label_encoder.pkl`, `metrics.json`
+
+2. **Inference** (`main.py`):
+   - On startup: loads the 3 `.pkl` files + `metrics.json`
+   - `POST /api/predict`: Takes soil params → scales → predicts top 2 crops using `predict_proba` → runs rule-based soil health check → returns results
+   - `GET /api/metrics`: Returns accuracy, confusion matrix, class list from `metrics.json`
+
+#### Soil Health Check (Rule-Based)
+The ML service also runs a **rule-based soil quality assessment**:
+
+| Parameter | Ideal Range | If Low | If High |
+|---|---|---|---|
+| Nitrogen (N) | 50–150 mg/kg | Add Urea | Use catch crops |
+| Phosphorus (P) | 16–45 mg/kg | Add Bone Meal | Avoid P-fertilizers |
+| Potassium (K) | ≥120 mg/kg | Add Potash | — |
+| pH | 6.0–7.5 | Apply lime | Add compost/sulfur |
+| Moisture | 20–80% | Increase irrigation | Improve drainage |
+
+Quality Rating: **Good** (0 issues) → **Moderate** (1-2 issues) → **Poor** (3+ issues)
+
+#### Pre-trained Model Files
+| File | Purpose | Size |
+|---|---|---|
+| `crop_xgb_model.pkl` | Trained XGBoost + RF ensemble | 5.2 MB |
+| `scaler.pkl` | StandardScaler fitted on training data | 1.1 KB |
+| `label_encoder.pkl` | Maps crop indices ↔ crop names | 830 B |
+| `metrics.json` | Accuracy, confusion matrix, class names | 8.8 KB |
+
+---
+
+### 🟠 PostgreSQL Database
+
+**Database Name**: `soil_ml_db`  
+**Connection**: `postgresql://postgres:Rohita@2006@localhost:5432/soil_ml_db`
+
+#### Schema (auto-created on backend startup)
+
+```mermaid
+erDiagram
+    soil_data {
+        SERIAL id PK
+        FLOAT n
+        FLOAT p
+        FLOAT k
+        FLOAT ph
+        FLOAT moisture
+        FLOAT temperature
+        FLOAT humidity
+        FLOAT rainfall
+        TIMESTAMP created_at
+    }
+
+    predictions {
+        SERIAL id PK
+        INTEGER soil_id FK
+        VARCHAR soil_quality
+        JSONB recommended_crops
+        JSONB improvement_tips
+        TIMESTAMP created_at
+    }
+
+    farmers {
+        SERIAL id PK
+        VARCHAR phone UK
+        VARCHAR name
+        VARCHAR village
+        TIMESTAMP created_at
+        TIMESTAMP last_login
+    }
+
+    otp_store {
+        SERIAL id PK
+        VARCHAR phone
+        VARCHAR otp
+        TIMESTAMP expires_at
+        BOOLEAN verified
+        TIMESTAMP created_at
+    }
+
+    model_metrics {
+        SERIAL id PK
+        VARCHAR version
+        FLOAT accuracy
+        TIMESTAMP training_date
+    }
+
+    soil_data ||--o{ predictions : "soil_id"
+```
+
+#### How Each Table is Used
+
+| Table | Written By | Read By | Purpose |
+|---|---|---|---|
+| `soil_data` | `POST /predict` (backend) | `GET /history` (JOIN) | Stores raw soil parameter readings |
+| `predictions` | `POST /predict` (backend) | `GET /history` (JOIN) | Stores ML output (quality, crops, tips) |
+| `farmers` | `POST /api/verify-otp` | `POST /api/verify-otp` | Farmer registration & login tracking |
+| `otp_store` | `POST /api/send-otp` | `POST /api/verify-otp` | Temporary OTP storage (rate-limited, 2-min expiry) |
+| `model_metrics` | (unused currently) | — | Reserved for storing model versions |
+
+---
+
+### 🟣 External APIs
+
+| Service | Used By | Purpose |
+|---|---|---|
+| **Fast2SMS** | Backend (`/api/send-sms`, `/api/send-otp`) | Send real SMS to Indian mobile numbers (OTP + soil reports) |
+| **Google Gemini 2.5 Flash** | Backend (`/api/chat`) | Powers the KrishiMitra AI chatbot — uses structured JSON output with navigation actions |
+
+---
+
+### 🔴 The `soil/` Directory
+
+This is the **original/legacy** directory containing:
+- `Crop_recommendation.csv` — the training dataset (used by `train_xgboost.py`)
+- `fpga_led_model.pkl` — an older FPGA hardware model (not used by the web app)
+- `universal_soil_model.pkl` — an older model (superseded by the XGBoost ensemble)
+- `main.py` — older standalone script (superseded by `ml_service/main.py`)
+
+> [!NOTE]
+> Only `Crop_recommendation.csv` is actively used from this directory. The rest are legacy artifacts.
+
+---
+
+## Summary: How Everything Connects
+
+```
+User opens http://localhost:5173
+    │
+    ├─→ Landing Page (/) → public marketing page
+    │
+    ├─→ Login (/login)
+    │      └─→ POST /api/send-otp  → Backend → PostgreSQL (otp_store) + Fast2SMS
+    │      └─→ POST /api/verify-otp → Backend → PostgreSQL (farmers) → localStorage
+    │
+    └─→ Protected App (/app/*)
+           │
+           ├── Analyze → POST /predict → Backend → PostgreSQL + ML Service → Results
+           ├── Results → Displays data passed via React Router state
+           ├── Insights → GET /metrics → Backend → ML Service (metrics.json)
+           ├── History → GET /history → Backend → PostgreSQL (JOIN query)
+           ├── SMS → POST /api/send-sms → Backend → Fast2SMS
+           └── Chatbot (floating) → POST /api/chat → Backend → Google Gemini
+```
+
+**The 3 services communicate via HTTP REST APIs. There is no WebSocket or message queue — it's a straightforward request-response architecture.**
