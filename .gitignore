@@ -1,27 +1,24 @@
-# Dependencies
-node_modules/
-__pycache__/
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Environment
-.env
+node_modules
+dist
+dist-ssr
+*.local
 
-# Build output
-dist/
-build/
-
-# IDE
-.vscode/
-.idea/
-
-# OS
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
 .DS_Store
-Thumbs.db
-
-# Large model files (optional - uncomment if you want to exclude them)
-# *.pkl
-
-# Video files (too large for git)
-landing page video.mp4
-
-landing_video.mp4
-frontend/public/landing_video.mp4
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
