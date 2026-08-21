@@ -1,10 +1,46 @@
 import React, { useEffect, useState } from 'react';
-import { TrendingUp, DollarSign, Calendar, MapPin, ArrowUpRight, ArrowDownRight, ShieldCheck, Zap } from 'lucide-react';
+import { TrendingUp, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:5005';
+
+const MOCK_MARKET_DATA = {
+  success: true,
+  crops: [
+    {
+      crop: 'Wheat', top_mandi: 'Indore APMC', current_price_rs_quintal: 2340, predicted_price_30d: 2510,
+      trend: '📈 UPTREND', recommendation: 'Hold & Sell in 3 Weeks',
+      historical_30d: [2180, 2200, 2190, 2220, 2240, 2260, 2290, 2300, 2320, 2330, 2310, 2340],
+      forecast_30d: [2370, 2400, 2420, 2460, 2490, 2510, 2500, 2490]
+    },
+    {
+      crop: 'Soybean', top_mandi: 'Ujjain APMC', current_price_rs_quintal: 4850, predicted_price_30d: 4620,
+      trend: '📉 DOWNTREND', recommendation: 'Sell Now — Price Peak Passed',
+      historical_30d: [4700, 4750, 4800, 4820, 4860, 4900, 4870, 4850, 4830, 4820, 4860, 4850],
+      forecast_30d: [4800, 4770, 4740, 4700, 4660, 4640, 4620, 4600]
+    },
+    {
+      crop: 'Onion', top_mandi: 'Lasalgaon APMC', current_price_rs_quintal: 1850, predicted_price_30d: 2200,
+      trend: '📈 STRONG UPTREND', recommendation: 'Hold for 4-5 Weeks',
+      historical_30d: [1400, 1450, 1500, 1550, 1600, 1650, 1700, 1720, 1750, 1780, 1820, 1850],
+      forecast_30d: [1900, 1960, 2000, 2060, 2100, 2150, 2190, 2200]
+    },
+    {
+      crop: 'Cotton', top_mandi: 'Khandwa APMC', current_price_rs_quintal: 6450, predicted_price_30d: 6600,
+      trend: '📈 STABLE UPTREND', recommendation: 'Gradual Sell Over 2 Weeks',
+      historical_30d: [6200, 6220, 6250, 6280, 6300, 6320, 6350, 6370, 6400, 6420, 6440, 6450],
+      forecast_30d: [6480, 6500, 6520, 6540, 6560, 6580, 6590, 6600]
+    },
+    {
+      crop: 'Tomato', top_mandi: 'Nashik APMC', current_price_rs_quintal: 1100, predicted_price_30d: 850,
+      trend: '📉 DOWNTREND', recommendation: 'Urgent — Sell Immediately',
+      historical_30d: [1600, 1550, 1450, 1400, 1350, 1300, 1250, 1220, 1200, 1150, 1120, 1100],
+      forecast_30d: [1050, 1000, 980, 940, 900, 880, 860, 850]
+    }
+  ]
+};
 
 export default function MarketForecasting() {
   const [marketData, setMarketData] = useState(null);
@@ -17,9 +53,12 @@ export default function MarketForecasting() {
         const res = await axios.get(`${BACKEND_URL}/api/market/forecast`);
         if (res.data?.success) {
           setMarketData(res.data);
+        } else {
+          setMarketData(MOCK_MARKET_DATA);
         }
       } catch (err) {
-        console.error('Error fetching mandi market forecast', err);
+        console.warn('Backend unavailable — using demo market data.');
+        setMarketData(MOCK_MARKET_DATA);
       } finally {
         setLoading(false);
       }
@@ -37,7 +76,7 @@ export default function MarketForecasting() {
 
   return (
     <div style={{ maxWidth: '1150px', margin: '0 auto', padding: '1.5rem 1rem' }}>
-      
+
       {/* Title Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -86,7 +125,7 @@ export default function MarketForecasting() {
       {/* Main Grid: Price Curve + Action Advisory */}
       {activeCrop && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
-          
+
           {/* Recharts Price Curve */}
           <div style={{ background: '#FFFFFF', borderRadius: '1rem', padding: '1.5rem', border: '1px solid rgba(0,0,0,0.07)', boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -113,8 +152,8 @@ export default function MarketForecasting() {
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2E7D32" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#2E7D32" stopOpacity={0.0}/>
+                      <stop offset="5%" stopColor="#2E7D32" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#2E7D32" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" />

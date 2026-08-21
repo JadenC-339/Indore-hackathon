@@ -1,9 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { Satellite, Layers, MapPin, CheckCircle, AlertCircle, Info, RefreshCw, Eye } from 'lucide-react';
+import { Satellite, Layers, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:5005';
+
+const MOCK_SAT_DATA = {
+  success: true,
+  metrics: {
+    ndvi_mean: 0.74,
+    canopy_moisture_index: 0.68,
+    chlorophyll_index: 0.81,
+    surface_temperature_c: 28.4,
+    drought_vulnerability_score: 'Low (12/100)'
+  },
+  zones: [
+    { name: 'Zone Alpha (NW Parcel)', area_pct: 42, ndvi: 0.82, status: 'Healthy', recommendation: 'Maintain current irrigation. No intervention needed.' },
+    { name: 'Zone Beta (NE Parcel)', area_pct: 31, ndvi: 0.71, status: 'Moderate', recommendation: 'Apply 20% extra top-dressing nitrogen. Monitor daily.' },
+    { name: 'Zone Gamma (S Parcel)', area_pct: 27, ndvi: 0.58, status: 'Stressed', recommendation: 'Urgent: Apply 2L/hr drip irrigation + foliar spray of micronutrients.' }
+  ]
+};
 
 export default function SatelliteMap() {
   const [satData, setSatData] = useState(null);
@@ -16,9 +32,12 @@ export default function SatelliteMap() {
         const res = await axios.get(`${BACKEND_URL}/api/satellite/field`);
         if (res.data?.success) {
           setSatData(res.data);
+        } else {
+          setSatData(MOCK_SAT_DATA);
         }
       } catch (err) {
-        console.error('Error fetching satellite GIS data', err);
+        console.warn('Backend unavailable — using demo satellite data.');
+        setSatData(MOCK_SAT_DATA);
       } finally {
         setLoading(false);
       }
@@ -35,7 +54,7 @@ export default function SatelliteMap() {
 
   return (
     <div style={{ maxWidth: '1150px', margin: '0 auto', padding: '1.5rem 1rem' }}>
-      
+
       {/* Title Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -59,10 +78,10 @@ export default function SatelliteMap() {
 
       {/* Main Grid: GIS Viewer + Metrics Panel */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
-        
+
         {/* GIS Canvas Container */}
         <div style={{ background: '#111827', borderRadius: '1rem', padding: '1.5rem', color: '#FFF', boxShadow: '0 8px 25px rgba(0,0,0,0.15)', position: 'relative', overflow: 'hidden' }}>
-          
+
           {/* Controls Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', zIndex: 10, position: 'relative' }}>
             <div style={{ display: 'flex', items: 'center', gap: '0.4rem', fontSize: '0.88rem', fontWeight: 700 }}>
@@ -91,14 +110,14 @@ export default function SatelliteMap() {
           </div>
 
           {/* Satellite Interactive Field Visualizer */}
-          <div style={{ 
-            height: '320px', 
-            borderRadius: '0.75rem', 
-            background: activeLayer === 'ndvi' 
-              ? 'radial-gradient(circle at 60% 40%, #22c55e 0%, #16a34a 35%, #eab308 70%, #ef4444 100%)' 
+          <div style={{
+            height: '320px',
+            borderRadius: '0.75rem',
+            background: activeLayer === 'ndvi'
+              ? 'radial-gradient(circle at 60% 40%, #22c55e 0%, #16a34a 35%, #eab308 70%, #ef4444 100%)'
               : activeLayer === 'moisture'
-              ? 'radial-gradient(circle at 40% 50%, #0284c7 0%, #0369a1 40%, #0284c7 75%, #e0f2fe 100%)'
-              : 'radial-gradient(circle at 50% 50%, #84cc16 0%, #65a30d 50%, #ca8a04 100%)',
+                ? 'radial-gradient(circle at 40% 50%, #0284c7 0%, #0369a1 40%, #0284c7 75%, #e0f2fe 100%)'
+                : 'radial-gradient(circle at 50% 50%, #84cc16 0%, #65a30d 50%, #ca8a04 100%)',
             position: 'relative',
             display: 'flex',
             alignItems: 'center',
@@ -106,17 +125,17 @@ export default function SatelliteMap() {
             boxShadow: 'inset 0 0 40px rgba(0,0,0,0.6)',
             border: '2px solid rgba(255,255,255,0.15)'
           }}>
-            
+
             {/* Field Parcel SVG Overlay */}
             <svg width="90%" height="80%" viewBox="0 0 400 240" style={{ filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.5))' }}>
               {/* Zone Alpha */}
               <path d="M 30 40 L 220 30 L 250 140 L 40 160 Z" fill="rgba(34, 197, 94, 0.45)" stroke="#16a34a" strokeWidth="2" />
               <text x="100" y="90" fill="#FFF" fontSize="12" fontWeight="bold">Zone Alpha (NDVI: 0.82)</text>
-              
+
               {/* Zone Beta */}
               <path d="M 220 30 L 370 50 L 350 170 L 250 140 Z" fill="rgba(234, 179, 8, 0.45)" stroke="#ca8a04" strokeWidth="2" />
               <text x="260" y="100" fill="#FFF" fontSize="12" fontWeight="bold">Zone Beta (NDVI: 0.71)</text>
-              
+
               {/* Zone Gamma */}
               <path d="M 40 160 L 250 140 L 350 170 L 320 220 L 60 210 Z" fill="rgba(239, 68, 68, 0.45)" stroke="#dc2626" strokeWidth="2" />
               <text x="140" y="185" fill="#FFF" fontSize="12" fontWeight="bold">Zone Gamma (NDVI: 0.58)</text>

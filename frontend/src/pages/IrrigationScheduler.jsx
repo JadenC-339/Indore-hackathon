@@ -5,6 +5,26 @@ import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:5005';
 
+const MOCK_WEATHER_DATA = {
+  success: true,
+  location: 'Indore District, MP',
+  smart_irrigation_recommendation: {
+    action: 'Run Drip Irrigation Today (5:30 AM)',
+    optimal_time: '05:30 AM – 07:30 AM',
+    liters_per_acre: 4200,
+    efficiency_rating: 'Saved 1,800L vs flood irrigation. 32% water cost reduction.'
+  },
+  forecast: [
+    { day: 'Mon', condition: 'Sunny ☀️', temp_high: 34, temp_low: 22, rain_chance: 5, water_needed_liters_acre: 4200 },
+    { day: 'Tue', condition: 'Partly Cloudy', temp_high: 33, temp_low: 21, rain_chance: 15, water_needed_liters_acre: 3800 },
+    { day: 'Wed', condition: 'Windy 💨', temp_high: 32, temp_low: 20, rain_chance: 20, water_needed_liters_acre: 3600 },
+    { day: 'Thu', condition: 'Thunderstorm ⛈️', temp_high: 28, temp_low: 18, rain_chance: 85, water_needed_liters_acre: 0 },
+    { day: 'Fri', condition: 'Rain 🌧️', temp_high: 27, temp_low: 19, rain_chance: 70, water_needed_liters_acre: 0 },
+    { day: 'Sat', condition: 'Cloudy ☁️', temp_high: 30, temp_low: 20, rain_chance: 30, water_needed_liters_acre: 2800 },
+    { day: 'Sun', condition: 'Sunny ☀️', temp_high: 35, temp_low: 22, rain_chance: 5, water_needed_liters_acre: 4400 },
+  ]
+};
+
 export default function IrrigationScheduler() {
   const [weatherData, setWeatherData] = useState(null);
   const [acres, setAcres] = useState(2);
@@ -17,9 +37,12 @@ export default function IrrigationScheduler() {
         const res = await axios.get(`${BACKEND_URL}/api/weather/forecast`);
         if (res.data?.success) {
           setWeatherData(res.data);
+        } else {
+          setWeatherData(MOCK_WEATHER_DATA);
         }
       } catch (err) {
-        console.error('Error fetching weather data', err);
+        console.warn('Backend unavailable — using demo weather data.');
+        setWeatherData(MOCK_WEATHER_DATA);
       } finally {
         setLoading(false);
       }
@@ -31,7 +54,7 @@ export default function IrrigationScheduler() {
 
   return (
     <div style={{ maxWidth: '1150px', margin: '0 auto', padding: '1.5rem 1rem' }}>
-      
+
       {/* Title Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -55,7 +78,7 @@ export default function IrrigationScheduler() {
 
       {/* Main Grid: AI Recommendation Banner + Interactive Controls */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
-        
+
         {/* Recommendation Engine Box */}
         <div style={{
           background: 'linear-gradient(135deg, #0277BD 0%, #00838F 100%)',

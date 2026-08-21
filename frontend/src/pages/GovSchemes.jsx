@@ -3,12 +3,12 @@ import { Landmark, Search, Filter, FileText, CheckCircle, ExternalLink, Activity
 import { motion } from 'framer-motion';
 
 const schemes = [
-    { id: 1, name: 'PM-KISAN Samman Nidhi', category: 'Financial', amount: '₹6,000/year', eligibility: 'Small & Marginal Farmers', deadline: 'Ongoing', desc: 'Direct income support to farmer families across India.', color: '#10B981', url: '#' },
-    { id: 2, name: 'PM Fasal Bima Yojana (PMFBY)', category: 'Insurance', amount: 'Variable', eligibility: 'All Farmers', deadline: 'Jul 31 (Kharif)', desc: 'Crop insurance for yield losses due to non-preventable risks.', color: '#F59E0B', url: '#' },
-    { id: 3, name: 'Sub-Mission on Agricultural Mechanization (SMAM)', category: 'Subsidy', amount: 'Up to 50%', eligibility: 'SC/ST, Small Farmers', deadline: 'State specific', desc: 'Subsidy on purchase of agricultural machinery and tractors.', color: '#3B82F6', url: '#' },
-    { id: 4, name: 'Paramparagat Krishi Vikas Yojana (PKVY)', category: 'Subsidy', amount: '₹50,000/ha', eligibility: 'Organic Farmers', deadline: 'Ongoing', desc: 'Financial assistance to promote organic farming practices.', color: '#10B981', url: '#' },
-    { id: 5, name: 'Soil Health Card Scheme', category: 'Advisory', amount: 'Free', eligibility: 'All Farmers', deadline: 'Ongoing', desc: 'Free soil testing and tailored fertilizer recommendations.', color: '#8B5CF6', url: '#' },
-    { id: 6, name: 'PM Kusum Yojana', category: 'Energy', amount: 'Up to 60% Subsidy', eligibility: 'Farmers with irrigation', deadline: 'State specific', desc: 'Subsidy for setting up standalone solar pumps.', color: '#EAB308', url: '#' },
+    { id: 1, name: 'PM-KISAN Samman Nidhi', category: 'Financial', amount: '₹6,000/year', eligibility: 'Small & Marginal Farmers', deadline: 'Ongoing', desc: 'Direct income support to farmer families across India.', color: '#10B981', url: 'https://pmkisan.gov.in/' },
+    { id: 2, name: 'PM Fasal Bima Yojana (PMFBY)', category: 'Insurance', amount: 'Variable', eligibility: 'All Farmers', deadline: 'Jul 31 (Kharif)', desc: 'Crop insurance for yield losses due to non-preventable risks.', color: '#F59E0B', url: 'https://pmfby.gov.in/' },
+    { id: 3, name: 'Sub-Mission on Agricultural Mechanization (SMAM)', category: 'Subsidy', amount: 'Up to 50%', eligibility: 'SC/ST, Small Farmers', deadline: 'State specific', desc: 'Subsidy on purchase of agricultural machinery and tractors.', color: '#3B82F6', url: 'https://agromachinery.nic.in/' },
+    { id: 4, name: 'Paramparagat Krishi Vikas Yojana (PKVY)', category: 'Subsidy', amount: '₹50,000/ha', eligibility: 'Organic Farmers', deadline: 'Ongoing', desc: 'Financial assistance to promote organic farming practices.', color: '#10B981', url: 'https://pgsindia-ncof.gov.in/pkvy/index.aspx' },
+    { id: 5, name: 'Soil Health Card Scheme', category: 'Advisory', amount: 'Free', eligibility: 'All Farmers', deadline: 'Ongoing', desc: 'Free soil testing and tailored fertilizer recommendations.', color: '#8B5CF6', url: 'https://soilhealth.dac.gov.in/' },
+    { id: 6, name: 'PM Kusum Yojana', category: 'Energy', amount: 'Up to 60% Subsidy', eligibility: 'Farmers with irrigation', deadline: 'State specific', desc: 'Subsidy for setting up standalone solar pumps.', color: '#EAB308', url: 'https://pmkusum.mnre.gov.in/' },
 ];
 
 export default function GovSchemes() {
@@ -55,7 +55,7 @@ export default function GovSchemes() {
                 <p style={{ opacity: 0.9, fontSize: '0.95rem', margin: '0 0 1rem 0', maxWidth: '600px' }}>
                     Based on your irrigation profile and farm size, there is a 95% match for a 60% subsidy on a 5HP solar pump installation.
                 </p>
-                <button style={{ background: 'white', color: '#1D4ED8', border: 'none', padding: '0.6rem 1.2rem', borderRadius: '0.5rem', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <button onClick={() => window.open('https://pmkusum.mnre.gov.in/', '_blank')} style={{ background: 'white', color: '#1D4ED8', border: 'none', padding: '0.6rem 1.2rem', borderRadius: '0.5rem', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     Apply Now / Apply Scheme <ExternalLink size={16} />
                 </button>
             </div>
@@ -120,7 +120,7 @@ export default function GovSchemes() {
                             </div>
                         </div>
 
-                        <button style={{ width: '100%', background: 'white', color: '#2563EB', border: '1px solid #2563EB', padding: '0.6rem', borderRadius: '0.6rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', transition: 'all 0.2s' }} onMouseEnter={e => { e.target.style.background = '#EFF6FF' }} onMouseLeave={e => { e.target.style.background = 'white' }}>
+                        <button onClick={() => window.open(s.url, '_blank')} style={{ width: '100%', background: 'white', color: '#2563EB', border: '1px solid #2563EB', padding: '0.6rem', borderRadius: '0.6rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', transition: 'all 0.2s' }} onMouseEnter={e => { e.target.style.background = '#EFF6FF' }} onMouseLeave={e => { e.target.style.background = 'white' }}>
                             View details <ExternalLink size={16} />
                         </button>
                     </motion.div>

@@ -6,6 +6,23 @@ import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:5005';
 
+const MOCK_IOT_DATA = {
+  success: true,
+  sensors: [
+    { id: 'NODE-01', type: 'Soil Moisture Sensor', location: 'North Field, Zone A', value: 42, unit: '%', battery: 87, status: 'Normal' },
+    { id: 'NODE-02', type: 'Soil Temperature Probe', location: 'North Field, Zone A', value: 28.6, unit: '°C', battery: 79, status: 'Normal' },
+    { id: 'NODE-03', type: 'Atmospheric Humidity', location: 'Central Field', value: 68, unit: '%', battery: 91, status: 'Normal' },
+    { id: 'NODE-04', type: 'NPK Electrochemical Sensor', location: 'South Parcel', battery: 73, status: 'Calibrating', n: 145, p: 38, k: 204 },
+    { id: 'NODE-05', type: 'Leaf Wetness Sensor', location: 'East Bund', value: 0, unit: '(Dry)', battery: 95, status: 'Healthy' },
+    { id: 'NODE-06', type: 'Solar Radiation Pyranometer', location: 'Weather Station', value: 624, unit: 'W/m²', battery: 100, status: 'Normal' },
+  ],
+  alerts: [
+    { id: 1, severity: 'warning', message: 'Zone A moisture below 40% — drip irrigation recommended', timestamp: '08:14 AM' },
+    { id: 2, severity: 'info', message: 'NPK Node-04 calibration complete. New K reading: 204 mg/kg', timestamp: '07:50 AM' },
+    { id: 3, severity: 'ok', message: 'All 6 sensor nodes online. LoRaWAN uptime: 99.8%', timestamp: '07:00 AM' },
+  ]
+};
+
 export default function IoTTelemetry() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,18 +35,22 @@ export default function IoTTelemetry() {
       if (res.data?.success) {
         setData(res.data);
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        
-        // Find soil moisture node
         const moistureVal = res.data.sensors.find(s => s.type.includes('Moisture'))?.value || 45;
         const tempVal = res.data.sensors.find(s => s.type.includes('Temp'))?.value || 29;
-
         setHistoryChart(prev => {
           const updated = [...prev, { time: timeStr, moisture: moistureVal, temp: tempVal }];
-          return updated.slice(-10); // Keep last 10 points
+          return updated.slice(-10);
         });
+      } else {
+        if (!data) setData(MOCK_IOT_DATA);
       }
     } catch (err) {
-      console.error('Error fetching IoT telemetry', err);
+      console.warn('Backend unavailable — using demo IoT data.');
+      if (!data) {
+        setData(MOCK_IOT_DATA);
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setHistoryChart([{ time: now, moisture: 42, temp: 28.6 }]);
+      }
     } finally {
       setLoading(false);
     }
@@ -48,7 +69,7 @@ export default function IoTTelemetry() {
 
   return (
     <div style={{ maxWidth: '1150px', margin: '0 auto', padding: '1.5rem 1rem' }}>
-      
+
       {/* Page Title Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -169,7 +190,7 @@ export default function IoTTelemetry() {
 
       {/* Live Chart & System Alerts */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
-        
+
         {/* Real-time Graph */}
         <div style={{ background: '#FFFFFF', padding: '1.5rem', borderRadius: '1rem', border: '1px solid rgba(0,0,0,0.07)', boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -203,7 +224,7 @@ export default function IoTTelemetry() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
             {data?.alerts.map((alt) => (
-              <div 
+              <div
                 key={alt.id}
                 style={{
                   padding: '0.9rem',
