@@ -12,12 +12,40 @@ export default function ExportReports() {
         { id: 'market', title: 'Mandi Price Forecast Extract', type: 'CSV', size: '0.8 MB', desc: '30-day historical and predicted price datasets for all tracked crops.' },
     ];
 
-    const handleDownload = (id) => {
-        setDownloading(id);
-        // Simulate generation/download time
+    const handleDownload = (r) => {
+        setDownloading(r.id);
+
+        // Simulate generation time for realistic UX
         setTimeout(() => {
+            let content, filename, type;
+
+            if (r.type === 'CSV') {
+                // Generate a dummy CSV content based on report type
+                content = r.id === 'water' ?
+                    "Date,ET0,Zone,Irrigation Applied (L),Saved (L)\n2025-10-01,4.2,A,450,150\n2025-10-02,4.1,A,440,160\n" :
+                    "Date,Crop,Mandi,Price/Qtl,Predicted/Qtl\n2025-10-01,Wheat,Indore,2250,2300\n2025-10-02,Wheat,Indore,2260,2315\n";
+                filename = `${r.id}_extract_${new Date().toISOString().split('T')[0]}.csv`;
+                type = 'text/csv';
+            } else {
+                // Generate a very rudimentary dummy textual 'PDF' for demonstration purposes
+                // (In a real app, a library like jsPDF would be used)
+                content = `KrishiMitra Automated Export\n---------------------------------\nReport Title: ${r.title}\nDescription: ${r.desc}\nGenerated At: ${new Date().toLocaleString()}\n\n[End of Document]`;
+                filename = `${r.id}_report_${new Date().toISOString().split('T')[0]}.txt`; // downloading as txt for simplicity in demo
+                type = 'text/plain';
+            }
+
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
             setDownloading(null);
-            alert('Report generated and downloaded successfully!');
         }, 1500);
     };
 
@@ -63,7 +91,7 @@ export default function ExportReports() {
                         <p style={{ fontSize: '0.85rem', color: '#64748B', lineHeight: 1.5, margin: '0 0 1.5rem 0', flex: 1 }}>{r.desc}</p>
 
                         <button
-                            onClick={() => handleDownload(r.id)}
+                            onClick={() => handleDownload(r)}
                             disabled={downloading === r.id}
                             style={{
                                 width: '100%',
